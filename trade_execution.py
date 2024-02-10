@@ -37,8 +37,14 @@ def place_order(symbol, qty, side, order_type='market', time_in_force='gtc'):
             time_in_force=time_in_force
         )
         print(f"Successfully placed {side} order for {qty} shares of {symbol}.")
-    except Exception as e:
-        print(f"An error occurred when placing the order: {e}")
+    except tradeapi.rest.APIError as e:  # Catching the APIError specifically
+        error_message = str(e)
+        if "wash trade" in error_message.lower():
+            print("Failed to place order due to potential wash trade detection. Consider revising your strategy.")
+        else:
+            print(f"Error placing {side} order for {symbol}: {error_message}")
+    except Exception as e:  # A general exception for any other errors
+        print(f"An unexpected error occurred when placing the order: {e}")
 
 def execute_trade(signal, symbol, qty):
     """
@@ -53,10 +59,8 @@ def execute_trade(signal, symbol, qty):
         # Place a buy order if we don't have a short position
         place_order(symbol, qty, 'buy')
     elif signal == 'sell' and current_position <= 0:
-        # Only place a sell order if we have a position
-        if current_position < 0:
-            # If we have a short position, cover it
-            place_order(symbol, abs(current_position), 'buy')
-        else:
-            # Place a sell order if we have a long position to sell
-            place_order(symbol, qty, 'sell')
+        # If we have a short position, cover it
+        place_order(symbol, abs(current_position), 'buy')
+    else:
+        # Place a sell order if we have a long position to sell
+        place_order(symbol, qty, 'sell')

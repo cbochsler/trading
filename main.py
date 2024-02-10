@@ -5,15 +5,15 @@ from datetime import datetime, timedelta
 
 symbol = 'AAPL'
 timeframe = '1D'
-start_date = '2023-01-01'
-end_date = '2024-01-01'
+end_date = datetime.today() - timedelta(days=1)
+start_date = end_date - timedelta(days=365)
 qty = 10  # Define your quantity based on your strategy or account size
 
 short_window = 20  # Example short window size
 long_window = 50  # Example long window size
 
 # Example: Fetch historical data for AAPL
-historical_data = get_historical_data(symbol, start_date, end_date, timeframe)
+historical_data = get_historical_data(symbol, start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'), timeframe)
 print(historical_data)
 
 # Example: Fetch real-time data for AAPL
