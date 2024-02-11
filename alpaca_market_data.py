@@ -1,5 +1,7 @@
 import alpaca_trade_api as tradeapi
 from config import API_KEY, API_SECRET, BASE_URL
+import requests
+from time import sleep
 
 # Initialize Alpaca API
 api = tradeapi.REST(API_KEY, API_SECRET, BASE_URL, api_version='v2')
@@ -28,3 +30,29 @@ def get_real_time_data(symbol):
     # This uses the IEX exchange data for real-time prices
     quote = api.get_latest_trade(symbol)
     return quote
+
+def fetch_with_retry(url, headers, max_retries=5, backoff_factor=0.3):
+    """
+    Attempts to fetch data with retries on failure.
+    
+    :param url: URL to fetch data from.
+    :param headers: Headers to include in the request.
+    :param max_retries: Maximum number of retry attempts.
+    :param backoff_factor: Factor to determine the delay between retries.
+    """
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Raises HTTPError for bad responses
+            return response.json()
+        except requests.exceptions.HTTPError as e:
+            # Handle specific HTTP errors if needed
+            print(f"HTTPError: {e}")
+        except requests.exceptions.RequestException as e:
+            # Handle other request issues (e.g., connectivity)
+            print(f"RequestException: {e}")
+            sleep((2 ** attempt) * backoff_factor)
+        else:
+            break
+    else:
+        print("Max retries exceeded with no success.")

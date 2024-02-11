@@ -1,8 +1,20 @@
 import alpaca_trade_api as tradeapi
 from config import API_KEY, API_SECRET, BASE_URL
+from time import sleep
 
 # Initialize Alpaca API
 api = tradeapi.REST(API_KEY, API_SECRET, BASE_URL, api_version='v2')
+
+def handle_api_limit(response):
+    """
+    Checks if the response indicates an API limit has been reached and sleeps accordingly.
+    
+    :param response: The API response to check.
+    """
+    if response.status_code == 429:  # 429 is the HTTP status code for Too Many Requests
+        retry_after = int(response.headers.get('Retry-After', 60))  # Default to 60 seconds if header is missing
+        print(f"Rate limit reached. Cooling off for {retry_after} seconds.")
+        sleep(retry_after)
 
 def check_position(symbol):
     """
@@ -18,7 +30,7 @@ def check_position(symbol):
         # Assuming no position is held if an exception occurs
         return 0
 
-def place_order(symbol, qty, side, order_type='market', time_in_force='gtc'):
+def place_order(symbol, qty, side, order_type='market', time_in_force='gtc', retries=3):
     """
     Place an order through the Alpaca API.
     
@@ -28,23 +40,30 @@ def place_order(symbol, qty, side, order_type='market', time_in_force='gtc'):
     :param order_type: Type of order, default is 'market'
     :param time_in_force: How long the order remains in effect, default is 'gtc' (good til canceled)
     """
-    try:
-        api.submit_order(
-            symbol=symbol,
-            qty=qty,
-            side=side,
-            type=order_type,
-            time_in_force=time_in_force
-        )
-        print(f"Successfully placed {side} order for {qty} shares of {symbol}.")
-    except tradeapi.rest.APIError as e:  # Catching the APIError specifically
-        error_message = str(e)
-        if "wash trade" in error_message.lower():
-            print("Failed to place order due to potential wash trade detection. Consider revising your strategy.")
-        else:
-            print(f"Error placing {side} order for {symbol}: {error_message}")
-    except Exception as e:  # A general exception for any other errors
-        print(f"An unexpected error occurred when placing the order: {e}")
+    attempt = 0
+    while attempt < retries:
+        try:
+            api.submit_order(
+                symbol=symbol,
+                qty=qty,
+                side=side,
+                type=order_type,
+                time_in_force=time_in_force
+            )
+            attempt += 1
+            print(f"Successfully placed {side} order for {qty} shares of {symbol}.")
+        except tradeapi.rest.APIError as e:  # Catching the APIError specifically
+            error_message = str(e)
+            if "wash trade" in error_message.lower():
+                print("Failed to place order due to potential wash trade detection. Consider revising your strategy.")
+            elif "rate limit" in str(e).lower():
+                handle_api_limit(e.response)
+            else:
+                print(f"Error placing {side} order for {symbol} on attempt {attempt}: {error_message}")
+                sleep(2 ** attempt)  # Exponential backoff
+        except Exception as e:  # A general exception for any other errors
+            print(f"An unexpected error occurred when placing the order on attempt {attempt}: {e}")
+            break  # Break on non-retriable errors
 
 def execute_trade(signal, symbol, qty):
     """
